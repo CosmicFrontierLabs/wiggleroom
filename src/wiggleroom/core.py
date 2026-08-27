@@ -368,25 +368,44 @@ class Ctx:
         """A logic waveform: low, going high for `high` at every period boundary.
 
         `first` is any rising edge; the train is extended both ways to fill the
-        figure, so a phase-shifted clock needs no special casing. `min_high_px`
-        lets a pulse far below the figure's resolution still read as a pulse -
-        the caller is expected to say so on the lane. Returns the high time as
+        figure, so a phase-shifted clock needs no special casing. A pulse
+        straddling either end of the window is drawn at the level it holds there
+        rather than being clamped to a transition, so the waveform's state at
+        t=0 and t=tmax is whatever the train says it is. `min_high_px` lets a
+        pulse far below the figure's resolution still read as a pulse - the
+        caller is expected to say so on the lane. Returns the high time as
         drawn, so a caller can compare it against the real one.
         """
         drawn_high = max(high, min_high_px / self.px)
         top = self.cy + dy - h / 2
         bot = self.cy + dy + h / 2
-        d = [f"M{self.T(0):.1f} {bot:.1f}"]
+
+        # Collect the pulses that reach the window before drawing any of them, so
+        # the level the signal *holds* at each boundary is known. Deciding per
+        # pulse instead invents a transition at the edge: a pulse still high when
+        # the window opens would be drawn rising at t=0, and one that falls
+        # exactly at t=0 would lose its falling edge altogether.
+        pulses = []
         k = math.floor((0.0 - first) / period)
         while first + k * period < self.tmax:
             rise = first + k * period
             fall = rise + drawn_high
-            if fall > 0:
-                r, f = max(rise, 0.0), min(fall, self.tmax)
-                d.append(f"L{self.T(r):.1f} {bot:.1f} L{self.T(r):.1f} {top:.1f} "
-                         f"L{self.T(f):.1f} {top:.1f} L{self.T(f):.1f} {bot:.1f}")
+            if fall >= 0.0:
+                pulses.append((rise, fall))
             k += 1
-        d.append(f"L{self.T(self.tmax):.1f} {bot:.1f}")
+
+        opens_high = bool(pulses) and pulses[0][0] < 0.0
+        closes_high = bool(pulses) and pulses[-1][1] > self.tmax
+        d = [f"M{self.T(0):.1f} {(top if opens_high else bot):.1f}"]
+        for rise, fall in pulses:
+            if rise >= 0.0:
+                d.append(f"L{self.T(rise):.1f} {bot:.1f} L{self.T(rise):.1f} {top:.1f}")
+            f = min(fall, self.tmax)
+            d.append(f"L{self.T(f):.1f} {top:.1f}")
+            if fall <= self.tmax:
+                d.append(f"L{self.T(f):.1f} {bot:.1f}")
+        if not closes_high:
+            d.append(f"L{self.T(self.tmax):.1f} {bot:.1f}")
         self.raw(f'<path d="{" ".join(d)}" fill="none" stroke="{colour or self.colour}" '
                  f'stroke-width="{width}"/>')
         return drawn_high

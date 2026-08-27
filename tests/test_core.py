@@ -119,3 +119,40 @@ def test_amplitude_stays_inside_the_lane():
 def test_esc_neutralises_markup():
     assert esc("a < b & c > d") == "a &lt; b &amp; c &gt; d"
     assert INK2 != CRIT  # tokens exported and distinct
+
+
+def logic_path(*, tmax, period, high, first, lane_h=66):
+    """The `d` attribute of the one path `logic` emits, plus its rail positions."""
+    sink = []
+    ctx = Ctx(sink.append, tmax=tmax, cy=100.0, colour=GOOD, lane_h=lane_h)
+    ctx.logic(period, high, first=first, h=18)
+    d = ET.fromstring(sink[0]).get("d")
+    return d, ctx.T(0.0), ctx.T(tmax), 100.0 - 9, 100.0 + 9
+
+
+def test_logic_opens_at_the_level_the_signal_actually_holds():
+    """A pulse still high when the window opens must not be drawn rising at t=0."""
+    d, x_left, _, top, bot = logic_path(tmax=1000.0, period=500.0, high=250.0, first=400.0)
+    assert d.startswith(f"M{x_left:.1f} {top:.1f}")
+    assert f"M{x_left:.1f} {bot:.1f}" not in d
+
+
+def test_logic_draws_a_falling_edge_landing_exactly_on_the_window_start():
+    """The edge is at t=0 with no high time inside the window, and still real."""
+    d, x_left, _, top, bot = logic_path(tmax=1000.0, period=500.0, high=250.0, first=250.0)
+    assert d.startswith(f"M{x_left:.1f} {top:.1f}")
+    assert f"L{x_left:.1f} {bot:.1f}" in d
+
+
+def test_logic_opens_low_when_the_previous_pulse_ended_before_the_window():
+    d, x_left, _, _, bot = logic_path(tmax=1000.0, period=500.0, high=100.0, first=250.0)
+    assert d.startswith(f"M{x_left:.1f} {bot:.1f}")
+
+
+def test_logic_closes_at_the_level_the_signal_holds():
+    """A pulse still high at tmax must not gain a falling edge at the right edge."""
+    d, _, x_right, top, bot = logic_path(tmax=1000.0, period=500.0, high=250.0, first=900.0)
+    assert d.endswith(f"L{x_right:.1f} {top:.1f}")
+
+    low, _, x_right, _, bot = logic_path(tmax=1000.0, period=500.0, high=100.0, first=250.0)
+    assert low.endswith(f"L{x_right:.1f} {bot:.1f}")
