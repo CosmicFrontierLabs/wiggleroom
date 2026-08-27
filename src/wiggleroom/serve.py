@@ -174,7 +174,7 @@ def page(project, revision):
         w, h = _CORE.figure_size(f)
         parts.append(
             f'<section><div class="bar"><h2>{html.escape(f.heading)}</h2>'
-            f'<code>{len(f.lanes)} lanes &middot; 0&ndash;{f.tmax:g} {f.unit} '
+            f'<code>{len(f.lanes)} lanes &middot; {f.tmin:g}&ndash;{f.tmax:g} {f.unit} '
             f'&middot; {w}&times;{h}</code><span class="spacer"></span>'
             f'<span class="zoom"></span>'
             f'<button data-act="fit">fit</button><button data-act="one">1:1</button></div>'
