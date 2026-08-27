@@ -9,15 +9,19 @@ Entry point for a project wrapper:
     from wiggleroom.cli import main
     main(PROJECT, sys.argv[1:])
 
-Subcommands: `render` (the default), `export [--scale N]` for hi-DPI PNGs.
+Subcommands: `render` (the default), `export [--scale N]` for hi-DPI PNGs, and
+`serve [port]` for the regenerate-on-refresh preview. Serving re-imports the
+project script on every request, so it needs that script run directly
+(`python3 project.py serve`) — the entry module is derived from the invocation.
 """
 
 import argparse
 import pathlib
 import re
+import sys
 import textwrap
 
-from . import core, export
+from . import core, export, serve
 from .core import DETAIL_WRAP, render
 
 
@@ -99,8 +103,17 @@ def main(project, argv):
     exp.add_argument("--scale", type=int, default=4)
     exp.add_argument("--out", type=pathlib.Path, default=None,
                      help="defaults to the project cache's hidpi directory")
+    srv = sub.add_parser("serve", help="preview server, regenerated on every refresh")
+    srv.add_argument("port", nargs="?", type=int, default=8931)
     args = parser.parse_args(argv or ["render"])
 
+    if args.command == "serve":
+        entry = pathlib.Path(sys.argv[0]).resolve()
+        if entry.suffix != ".py":
+            parser.error("serve re-imports the project script per request, so it "
+                         "needs that script run directly: python3 <project>.py serve")
+        serve.main(entry.stem, entry.parent, [str(args.port)])
+        return
     render_all(project)
     if args.command == "export":
         export.export(project, scale=args.scale, out_dir=args.out)

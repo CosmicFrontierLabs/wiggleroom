@@ -166,7 +166,7 @@ def regenerate():
 def page(project, revision):
     hidpi = sorted(_HIDPI_DIR.glob("*.png")) if _HIDPI_DIR.is_dir() else []
     nav = "".join(
-        f'<a href="{f.slug}.svg">{f.number} &middot; {html.escape(f.name.split("—")[1].strip())}</a>'
+        f'<a href="{f.slug}.svg">{f.number} &middot; {html.escape(f.name.split("—")[-1].strip())}</a>'
         for f in project.figures
     )
     parts = []
