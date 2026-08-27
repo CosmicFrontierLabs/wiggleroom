@@ -5,6 +5,14 @@ timing-accounting work: many named signals against one time axis, every interval
 carrying its provenance, and the cross-lane relationships drawn rather than
 implied.
 
+![One double espresso shot, fully accounted](examples/espresso/espresso-1-shot.svg)
+
+The figure above is [`examples/espresso/project.py`](examples/espresso/project.py)
+— one page of declarative Python, rendered and checked by `python3 project.py`.
+Dense fills for motors too fast to resolve, a logic train for PID duty, curves
+for continuous quantities, pins for coincidence, arrows for cause, and a
+self-check printing the interlocking numbers on every render.
+
 The engine is stdlib-only — a project script runs anywhere Python does. Hi-DPI
 PNG export shells out to a headless chromium found on the machine (playwright's
 cache, or `WIGGLEROOM_CHROMIUM`).
