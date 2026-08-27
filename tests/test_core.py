@@ -4,8 +4,7 @@ import xml.etree.ElementTree as ET
 
 from conftest import make_figure, make_project
 from wiggleroom import CRIT, GOOD, INK2, Ctx, Guide, Lane, Link, figure_size, instants, render
-from wiggleroom.core import PLOT_W, time_to_x
-from wiggleroom.core import HEADER_H, OVERSET, SPAN_MIN_PX, X0, X1, esc
+from wiggleroom.core import HEADER_H, OVERSET, PLOT_W, SPAN_MIN_PX, X0, X1, esc, time_to_x
 
 
 def test_instants_covers_the_window():
