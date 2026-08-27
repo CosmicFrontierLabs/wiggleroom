@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wiggleroom"
+version = "0.1.0"
+description = "Lane-per-signal timing figures, rendered to SVG from declarative Python"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Cosmic Frontier Labs" }]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Scientific/Engineering :: Visualization",
+]
+# The engine is stdlib-only by design: a project script should run anywhere a
+# Python interpreter does. Hi-DPI export shells out to a headless chromium it
+# finds on the machine rather than pulling one in as a dependency.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/CosmicFrontierLabs/wiggleroom"
+Issues = "https://github.com/CosmicFrontierLabs/wiggleroom/issues"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wiggleroom"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
