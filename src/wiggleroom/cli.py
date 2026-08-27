@@ -84,7 +84,8 @@ def render_all(project):
         svg = render(project, figure)
         path.write_text(svg)
         shown = path.relative_to(cwd) if path.is_relative_to(cwd) else path
-        print(f"{shown}  {len(figure.lanes)} lanes, 0-{figure.tmax:g} {figure.unit}")
+        print(f"{shown}  {len(figure.lanes)} lanes, "
+              f"{figure.tmin:g}-{figure.tmax:g} {figure.unit}")
         findings = (check_details(figure) + check_prefixes(figure)
                     + check_arrowheads(svg, figure.slug) + check_collisions(figure)
                     + [f"{figure.slug}: annotation slid {shift:.0f} px right to fit: {text!r}"
