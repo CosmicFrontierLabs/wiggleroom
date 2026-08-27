@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 
 from conftest import make_figure, make_project
 from wiggleroom import CRIT, GOOD, INK2, Ctx, Guide, Lane, Link, figure_size, instants, render
+from wiggleroom.core import PLOT_W, time_to_x
 from wiggleroom.core import HEADER_H, OVERSET, SPAN_MIN_PX, X0, X1, esc
 
 
@@ -156,3 +157,71 @@ def test_logic_closes_at_the_level_the_signal_holds():
 
     low, _, x_right, _, bot = logic_path(tmax=1000.0, period=500.0, high=100.0, first=250.0)
     assert low.endswith(f"L{x_right:.1f} {bot:.1f}")
+
+
+def test_window_origin_defaults_to_zero_and_spans_the_plot():
+    fig = make_figure(tmax=50.0)
+    assert fig.tmin == 0.0
+    assert time_to_x(0.0, fig.tmin, fig.tmax) == X0
+    assert time_to_x(50.0, fig.tmin, fig.tmax) == X1
+
+
+def test_window_origin_rescales_rather_than_offsetting():
+    """tmin=-100 puts -100 at the left edge and keeps tmax at the right."""
+    fig = make_figure(tmin=-100.0, tmax=900.0)
+    assert time_to_x(-100.0, fig.tmin, fig.tmax) == X0
+    assert time_to_x(900.0, fig.tmin, fig.tmax) == X1
+    midpoint = time_to_x(400.0, fig.tmin, fig.tmax)
+    assert abs(midpoint - (X0 + PLOT_W / 2)) < 1e-6
+
+
+def test_axis_ticks_snap_to_the_step_across_a_negative_origin():
+    """Opening the window early must not knock every label off its round number."""
+    fig = make_figure(tmin=-100.0, tmax=200.0, tstep=100.0)
+    assert fig.axis_ticks == [-100.0, 0.0, 100.0, 200.0]
+
+    ragged = make_figure(tmin=-60.0, tmax=200.0, tstep=100.0)
+    assert ragged.axis_ticks == [0.0, 100.0, 200.0]
+
+
+def test_axis_labels_carry_the_time_not_the_tick_index(tmp_path):
+    fig = make_figure(tmin=-100.0, tmax=200.0, tstep=100.0)
+    proj = make_project(tmp_path, [fig])
+    svg = render(proj, fig)
+    assert ">-100<" in svg
+
+
+def test_edges_and_instants_reach_before_the_origin():
+    ctx = Ctx(lambda s: None, tmax=200.0, cy=0, colour=GOOD, tmin=-100.0)
+    assert list(ctx.edges(100.0)) == [-100.0, 0.0, 100.0, 200.0]
+    assert instants(0.0, 100.0, 200.0, -100.0) == [-100.0, 0.0, 100.0, 200.0]
+
+
+def test_logic_gives_a_t_zero_falling_edge_a_visible_run_in():
+    """The motivating case. With the window opening at 0 this edge has no high time
+    to fall from; opening it early gives the edge width behind it, which is the
+    whole reason to shift the origin."""
+    top, bot = 91.0, 109.0
+    sink = []
+    ctx = Ctx(sink.append, tmax=1000.0, cy=100.0, colour=GOOD, tmin=-100.0)
+    ctx.logic(500.0, 250.0, first=250.0, h=18)
+    d = ET.fromstring(sink[0]).get("d")
+
+    # The pulse spanning [-250, 0] holds the signal high across the whole run-in,
+    # so the path opens high and the fall at t=0 is the first transition drawn.
+    assert d.startswith(f"M{ctx.T(-100.0):.1f} {top:.1f}")
+    assert f"L{ctx.T(0.0):.1f} {top:.1f} L{ctx.T(0.0):.1f} {bot:.1f}" in d
+    assert ctx.T(0.0) - ctx.T(-100.0) > 100.0   # the run-in is real pixels, not a sliver
+
+
+def test_guides_and_links_share_the_lane_mapping_under_a_shifted_window(tmp_path):
+    """Guides and links are placed by the renderer, not a Ctx, so they are the
+    thing most likely to skew against the lanes they point at."""
+    lanes = [Lane("PUMP_A", "PUMP", "A", "first", lambda c: c.tick(0.0), "measured"),
+             Lane("CTRL_B", "CTRL", "B", "second", lambda c: c.tick(0.0), "modelled")]
+    fig = make_figure(tmin=-100.0, tmax=900.0, lanes=lanes,
+                      guides=[Guide(0.0, "PUMP_A", "CTRL_B")],
+                      links=[Link(0.0, 0.0, "PUMP_A", "CTRL_B")])
+    svg = render(make_project(tmp_path, [fig]), fig)
+    x = time_to_x(0.0, -100.0, 900.0)
+    assert svg.count(f'x1="{x:.1f}"') >= 2
