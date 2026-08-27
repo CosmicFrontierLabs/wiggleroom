@@ -108,7 +108,7 @@ if __name__ == "__main__":
 ```bash
 python3 project.py                 # render + every check
 python3 project.py export          # hi-DPI PNGs into the project cache
-python3 -c 'from wiggleroom.serve import main; main("project", ".")'   # live preview
+python3 project.py serve           # live preview, regenerated on refresh
 ```
 
 The preview server re-renders on every refresh and purges both the project and

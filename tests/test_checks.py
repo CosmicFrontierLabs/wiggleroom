@@ -1,7 +1,9 @@
 """The per-render checks: each one must catch its failure and stay quiet otherwise."""
 
+import pytest
+
 from conftest import make_figure, make_project
-from wiggleroom import Lane, render
+from wiggleroom import Lane, cli, render
 from wiggleroom.cli import (
     check_arrowheads,
     check_collisions,
@@ -78,3 +80,33 @@ def test_render_all_writes_each_figure_and_runs_self_check(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "duty covers 25%" in out
     assert "!" not in out  # a clean project renders without findings
+
+
+def test_serve_subcommand_derives_the_entry_from_the_script(tmp_path, monkeypatch, project):
+    proj, _ = project
+    script = tmp_path / "project.py"
+    script.write_text("PROJECT = None\n")
+    calls = []
+    monkeypatch.setattr(cli.serve, "main", lambda *a: calls.append(a))
+    monkeypatch.setattr(cli.sys, "argv", [str(script), "serve", "8123"])
+    cli.main(proj, ["serve", "8123"])
+    assert calls == [("project", tmp_path, ["8123"])]
+
+
+def test_serve_subcommand_defaults_the_port(tmp_path, monkeypatch, project):
+    proj, _ = project
+    script = tmp_path / "project.py"
+    script.write_text("PROJECT = None\n")
+    calls = []
+    monkeypatch.setattr(cli.serve, "main", lambda *a: calls.append(a))
+    monkeypatch.setattr(cli.sys, "argv", [str(script), "serve"])
+    cli.main(proj, ["serve"])
+    assert calls == [("project", tmp_path, ["8931"])]
+
+
+def test_serve_subcommand_refuses_a_nonscript_invocation(monkeypatch, project, capsys):
+    proj, _ = project
+    monkeypatch.setattr(cli.sys, "argv", ["pytest", "serve"])
+    with pytest.raises(SystemExit):
+        cli.main(proj, ["serve"])
+    assert "run directly" in capsys.readouterr().err
