@@ -563,7 +563,7 @@ def _defs(project, fig):
     # left, the consumer's on the right. A hard-stop gradient keeps the rounded
     # corners without a clip path, and paints the stroke to match. One def per
     # ordered pair, since (A, B) and (B, A) are different channels.
-    for a, b in {lane_pair(l) for l in fig.lanes if len(lane_pair(l)) == 2}:
+    for a, b in {lane_pair(lane) for lane in fig.lanes if len(lane_pair(lane)) == 2}:
         parts.append(
             f'<linearGradient id="half_{a}_{b}">'
             f'<stop offset="0.5" stop-color="{project.devices[a].colour}"/>'

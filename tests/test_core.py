@@ -3,8 +3,19 @@
 import xml.etree.ElementTree as ET
 
 from conftest import make_figure, make_project
-from wiggleroom import (CRIT, GOOD, INK2, Ctx, Guide, Lane, Link, figure_size,
-                        instants, lane_pair, render)
+from wiggleroom import (
+    CRIT,
+    GOOD,
+    INK2,
+    Ctx,
+    Guide,
+    Lane,
+    Link,
+    figure_size,
+    instants,
+    lane_pair,
+    render,
+)
 from wiggleroom.core import HEADER_H, OVERSET, PLOT_W, SPAN_MIN_PX, X0, X1, esc, time_to_x
 
 
@@ -244,7 +255,7 @@ def test_two_owner_lane_chrome_carries_both_colours(tmp_path):
     # The badge names both ends with the pair's direction, tinted by a
     # hard-split gradient; the rule is the producer's rail beside the consumer's.
     assert "PUMP → CTRL" in svg
-    assert f'<linearGradient id="half_PUMP_CTRL">' in svg
+    assert '<linearGradient id="half_PUMP_CTRL">' in svg
     assert f'stop-color="{pump}"/><stop offset="0.5" stop-color="{ctrl}"' in svg
     assert svg.count('width="2.2"') == 2
     assert 'fill="url(#half_PUMP_CTRL)"' in svg
