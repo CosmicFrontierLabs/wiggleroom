@@ -79,13 +79,17 @@ def check_collisions(figure):
 
 
 def render_all(project):
+    """Write every figure and run every check. Returns the findings, so a caller
+    can gate on them - the printout alone always succeeds."""
     cwd = pathlib.Path.cwd()
+    all_findings = []
     for figure in project.figures:
         path = project.out_dir / f"{figure.slug}.svg"
         svg = render(project, figure)
         path.write_text(svg)
         shown = path.relative_to(cwd) if path.is_relative_to(cwd) else path
-        print(f"{shown}  {len(figure.lanes)} lanes, 0-{figure.tmax:g} {figure.unit}")
+        print(f"{shown}  {len(figure.lanes)} lanes, "
+              f"{figure.tmin:g}-{figure.tmax:g} {figure.unit}")
         findings = (check_details(figure) + check_prefixes(figure)
                     + check_arrowheads(svg, figure.slug) + check_collisions(figure)
                     + [f"{figure.slug}: annotation slid {shift:.0f} px right to fit: {text!r}"
@@ -94,12 +98,16 @@ def render_all(project):
             print(f"  ! {line}")
         for line in (figure.self_check() if figure.self_check else []):
             print(f"    {line}")
+        all_findings += findings
+    return all_findings
 
 
 def main(project, argv):
     parser = argparse.ArgumentParser(description=project.title)
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("render", help="write the SVGs and run every check (the default)")
+    ren = sub.add_parser("render", help="write the SVGs and run every check (the default)")
+    ren.add_argument("--strict", action="store_true",
+                     help="exit nonzero if any check reports a finding (for CI)")
     exp = sub.add_parser("export", help="rasterise the figures at a device scale factor")
     exp.add_argument("--scale", type=int, default=4)
     exp.add_argument("--out", type=pathlib.Path, default=None,
@@ -116,6 +124,8 @@ def main(project, argv):
                          "needs that script run directly: python3 <project>.py serve")
         serve.main(entry.stem, entry.parent, [str(args.port)])
         return
-    render_all(project)
+    findings = render_all(project)
+    if getattr(args, "strict", False) and findings:
+        sys.exit(f"{len(findings)} finding(s) - failing because of --strict")
     if args.command == "export":
         export.export(project, scale=args.scale, out_dir=args.out)

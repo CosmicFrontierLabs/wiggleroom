@@ -195,6 +195,12 @@ class Figure:
     lanes: Sequence[Lane]
     tmax: float
     tstep: float
+    # Where the window opens. Non-zero when the subject starts before the nominal
+    # zero - a pre-trigger capture, or a clock whose defining edge is at t=0 and
+    # would otherwise be drawn hard against the left edge with nothing leading
+    # into it. The axis is labelled over the real range, so nothing is drawn
+    # outside what the reader can see the extent of.
+    tmin: float = 0.0
     unit: str = "ms"
     lane_h: int = LANE_H
     # Whether this figure has adopted the convention that a lane's name begins with
@@ -220,6 +226,14 @@ class Figure:
         """
         room = self.lane_h - 4 - DETAIL_BASELINE
         return 1 + max(0, int(room // DETAIL_LEADING))
+
+    @property
+    def axis_ticks(self):
+        """The labelled instants on the axis: every multiple of `tstep` in the
+        window. Snapped to the step rather than started at `tmin`, so opening the
+        window early does not push every label off the round numbers underneath
+        the lanes."""
+        return instants(0.0, self.tstep, self.tmax, self.tmin)
 
     @property
     def slug(self):
@@ -258,17 +272,27 @@ class Project:
             figure.slug_prefix = self.slug_prefix
 
 
-def instants(first, step, tmax):
-    """Every `first + k*step` inside [0, tmax].
+def time_to_x(t, tmin, tmax):
+    """The one place a time becomes a pixel.
+
+    `Ctx` owns this mapping for marks, but guides, links and the axis are placed
+    by the renderer, outside any `Ctx` - so the formula lived in two places and a
+    change to one silently skewed the other against its own lanes.
+    """
+    return X0 + (t - tmin) * (PLOT_W / (tmax - tmin))
+
+
+def instants(first, step, tmax, tmin=0.0):
+    """Every `first + k*step` inside [tmin, tmax].
 
     The drawing side has `Ctx.edges` for this, but marks referenced by guides have
     to be listed before any `Ctx` exists. Deriving them from the window rather than
     a hand-picked range of k means widening a figure cannot quietly leave the last
     few unpinned.
     """
-    out, t = [], first + math.floor((0.0 - first) / step) * step
+    out, t = [], first + math.floor((tmin - first) / step) * step
     while t <= tmax + 1e-9:
-        if t >= -1e-9:
+        if t >= tmin - 1e-9:
             out.append(t)
         t += step
     return out
@@ -283,20 +307,22 @@ class Ctx:
     has no meaning in the time domain.
     """
 
-    def __init__(self, emit, tmax, cy, colour, lane_h=LANE_H, device=None, devices=None):
+    def __init__(self, emit, tmax, cy, colour, lane_h=LANE_H, device=None, devices=None,
+                 tmin=0.0):
         self._emit = emit
         self.devices = devices or {}
+        self.tmin = tmin
         self.tmax = tmax
         self.cy = cy
         self.colour = colour
         self.lane_h = lane_h
         self.device = device
-        self.px = PLOT_W / tmax
+        self.px = PLOT_W / (tmax - tmin)
         self.x0 = X0
         self.x1 = X1
 
     def T(self, t):
-        return X0 + t * self.px
+        return time_to_x(t, self.tmin, self.tmax)
 
     def amplitude(self, fraction=0.62):
         """A peak offset that stays inside the lane. Waveforms use this instead of
@@ -358,45 +384,64 @@ class Ctx:
         )
 
     def tick_train(self, step, *, first=0.0, h=28, w=3.4, op=1.0, dy=0, colour=None):
-        t = first
-        while t <= self.tmax + 1e-9:
+        """`first` is any tick; the train fills the window in both directions, so a
+        train whose reference tick sits outside the window still gets drawn."""
+        for t in self.edges(step, first=first):
             self.tick(t, h=h, w=w, op=op, dy=dy, colour=colour)
-            t += step
 
     def logic(self, period, high, *, first=0.0, h=18, dy=0, colour=None, width=2.0,
               min_high_px=0.0):
         """A logic waveform: low, going high for `high` at every period boundary.
 
         `first` is any rising edge; the train is extended both ways to fill the
-        figure, so a phase-shifted clock needs no special casing. `min_high_px`
-        lets a pulse far below the figure's resolution still read as a pulse -
-        the caller is expected to say so on the lane. Returns the high time as
+        figure, so a phase-shifted clock needs no special casing. A pulse
+        straddling either end of the window is drawn at the level it holds there
+        rather than being clamped to a transition, so the waveform's state at
+        t=0 and t=tmax is whatever the train says it is. `min_high_px` lets a
+        pulse far below the figure's resolution still read as a pulse - the
+        caller is expected to say so on the lane. Returns the high time as
         drawn, so a caller can compare it against the real one.
         """
         drawn_high = max(high, min_high_px / self.px)
         top = self.cy + dy - h / 2
         bot = self.cy + dy + h / 2
-        d = [f"M{self.T(0):.1f} {bot:.1f}"]
-        k = math.floor((0.0 - first) / period)
+
+        # Collect the pulses that reach the window before drawing any of them, so
+        # the level the signal *holds* at each boundary is known. Deciding per
+        # pulse instead invents a transition at the edge: a pulse still high when
+        # the window opens would be drawn rising at t=0, and one that falls
+        # exactly at t=0 would lose its falling edge altogether.
+        pulses = []
+        k = math.floor((self.tmin - first) / period)
         while first + k * period < self.tmax:
             rise = first + k * period
             fall = rise + drawn_high
-            if fall > 0:
-                r, f = max(rise, 0.0), min(fall, self.tmax)
-                d.append(f"L{self.T(r):.1f} {bot:.1f} L{self.T(r):.1f} {top:.1f} "
-                         f"L{self.T(f):.1f} {top:.1f} L{self.T(f):.1f} {bot:.1f}")
+            if fall >= self.tmin:
+                pulses.append((rise, fall))
             k += 1
-        d.append(f"L{self.T(self.tmax):.1f} {bot:.1f}")
+
+        opens_high = bool(pulses) and pulses[0][0] < self.tmin
+        closes_high = bool(pulses) and pulses[-1][1] > self.tmax
+        d = [f"M{self.T(self.tmin):.1f} {(top if opens_high else bot):.1f}"]
+        for rise, fall in pulses:
+            if rise >= self.tmin:
+                d.append(f"L{self.T(rise):.1f} {bot:.1f} L{self.T(rise):.1f} {top:.1f}")
+            f = min(fall, self.tmax)
+            d.append(f"L{self.T(f):.1f} {top:.1f}")
+            if fall <= self.tmax:
+                d.append(f"L{self.T(f):.1f} {bot:.1f}")
+        if not closes_high:
+            d.append(f"L{self.T(self.tmax):.1f} {bot:.1f}")
         self.raw(f'<path d="{" ".join(d)}" fill="none" stroke="{colour or self.colour}" '
                  f'stroke-width="{width}"/>')
         return drawn_high
 
     def edges(self, period, *, first=0.0):
         """Every instant of `first + k*period` that lands inside the figure."""
-        k = math.floor((0.0 - first) / period)
+        k = math.floor((self.tmin - first) / period)
         while first + k * period <= self.tmax + 1e-9:
             t = first + k * period
-            if t >= -1e-9:
+            if t >= self.tmin - 1e-9:
                 yield t
             k += 1
 
@@ -555,7 +600,7 @@ def _lane(emit, project, fig, lane, index, lane_top):
         emit(text(X_MARKS + i * MARK_W, cy + 6, m.glyph, 15.5, m.colour, "start", 700))
 
     lane.draw(Ctx(emit, fig.tmax, cy, col, fig.lane_h, device=lane.device,
-                  devices=project.devices))
+                  devices=project.devices, tmin=fig.tmin))
 
 
 def figure_size(fig: Figure):
@@ -588,9 +633,8 @@ def render(project: Project, fig: Figure) -> str:
     emit(text(X_IDX + 10, top + 50, fig.blurb, 12.5, INK2))
 
     lanes_top = top + PANEL_HDR_H
-    steps = int(round(fig.tmax / fig.tstep))
-    for i in range(steps + 1):
-        x = X0 + i * fig.tstep * (PLOT_W / fig.tmax)
+    for t in fig.axis_ticks:
+        x = time_to_x(t, fig.tmin, fig.tmax)
         emit(f'<line x1="{x:.1f}" y1="{lanes_top}" x2="{x:.1f}" y2="{lanes_top + lanes_h + 12}" '
              f'stroke="{GRID}" stroke-width="1"/>')
 
@@ -599,7 +643,7 @@ def render(project: Project, fig: Figure) -> str:
 
     lane_row = {lane.key: i for i, lane in enumerate(fig.lanes)}
     for guide in fig.guides:
-        x = X0 + guide.t * (PLOT_W / fig.tmax)
+        x = time_to_x(guide.t, fig.tmin, fig.tmax)
         y_from = lanes_top + lane_row[guide.from_key] * fig.lane_h + fig.lane_h / 2
         y_to = lanes_top + lane_row[guide.to_key] * fig.lane_h + fig.lane_h / 2
         marker = (f' marker-end="url(#{arrow_marker(guide.colour, project.devices)})"'
@@ -621,8 +665,8 @@ def render(project: Project, fig: Figure) -> str:
                       halo=HALO_PX))
 
     for link in fig.links:
-        x1 = X0 + link.t_from * (PLOT_W / fig.tmax)
-        x2 = X0 + link.t_to * (PLOT_W / fig.tmax)
+        x1 = time_to_x(link.t_from, fig.tmin, fig.tmax)
+        x2 = time_to_x(link.t_to, fig.tmin, fig.tmax)
         y1 = lanes_top + lane_row[link.from_key] * fig.lane_h + fig.lane_h * 0.78
         y2 = lanes_top + lane_row[link.to_key] * fig.lane_h + fig.lane_h * 0.22
         da = f' stroke-dasharray="{link.dash}"' if link.dash else ""
@@ -638,11 +682,11 @@ def render(project: Project, fig: Figure) -> str:
 
     axis_y = lanes_top + lanes_h + 24
     emit(f'<line x1="{X0}" y1="{axis_y}" x2="{X1}" y2="{axis_y}" stroke="{AXIS}" stroke-width="1.4"/>')
-    for i in range(steps + 1):
-        x = X0 + i * fig.tstep * (PLOT_W / fig.tmax)
+    for t in fig.axis_ticks:
+        x = time_to_x(t, fig.tmin, fig.tmax)
         emit(f'<line x1="{x:.1f}" y1="{axis_y}" x2="{x:.1f}" y2="{axis_y+5}" '
              f'stroke="{AXIS}" stroke-width="1.4"/>')
-        emit(text(x, axis_y + 19, f"{i * fig.tstep:g}", 11, MUTED, "middle"))
+        emit(text(x, axis_y + 19, f"{t:g}", 11, MUTED, "middle"))
     emit(text(X0 - 14, axis_y + 19, fig.unit, 11.5, MUTED, "end", 700))
 
     emit('</svg>')

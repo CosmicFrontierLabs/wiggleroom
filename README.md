@@ -29,6 +29,14 @@ vocabularies, and where output goes. A **Figure** is a lane table on one time
 axis. A **Lane** belongs to a device, carries a title, a sentence of detail, one
 provenance mark, and a draw function that places marks through a **Ctx**.
 
+A figure's window is `tmin` to `tmax`, and `tmin` defaults to zero. Set it
+negative when the subject starts before the nominal zero — a pre-trigger capture,
+or a clock whose defining edge is *at* zero and would otherwise be drawn hard
+against the left edge with no run-in to fall from. Axis labels stay snapped to
+`tstep`, so opening the window early does not knock every number off its round
+value; the axis is labelled across the real range, so a figure never draws time
+it does not admit to.
+
 Cross-lane relationships are first-class, addressed by lane key so reordering a
 figure cannot silently repoint them:
 

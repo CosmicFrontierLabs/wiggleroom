@@ -226,7 +226,7 @@ def describe(project):
         figures.append({
             "slug": f.slug, "w": w, "h": h, "heading": f.heading,
             "nav": f"{f.number} · {f.name.split('—')[-1].strip()}",
-            "meta": f"{len(f.lanes)} lanes · 0–{f.tmax:g} {f.unit} · {w}×{h}",
+            "meta": f"{len(f.lanes)} lanes · {f.tmin:g}–{f.tmax:g} {f.unit} · {w}×{h}",
         })
     return figures
 
@@ -303,7 +303,7 @@ def page(project, revision):
         w, h = _CORE.figure_size(f)
         parts.append(
             f'<section data-slug="{f.slug}"><div class="bar"><h2>{html.escape(f.heading)}</h2>'
-            f'<code>{len(f.lanes)} lanes &middot; 0&ndash;{f.tmax:g} {f.unit} '
+            f'<code>{len(f.lanes)} lanes &middot; {f.tmin:g}&ndash;{f.tmax:g} {f.unit} '
             f'&middot; {w}&times;{h}</code><span class="spacer"></span>'
             f'<span class="zoom"></span>'
             f'<button data-act="fit">fit</button><button data-act="one">1:1</button></div>'
