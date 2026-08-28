@@ -156,8 +156,13 @@ class Lane:
 
 def lane_pair(lane) -> tuple:
     """A lane's owners, always as a tuple - one key normally, two for a shared
-    channel. The first entry is the primary: it picks `Ctx.colour`, the dense
-    pattern, and the prefix the `device_prefixed` check holds the name to."""
+    channel. The first entry is the producer, by convention and not merely as
+    the primary that picks `Ctx.colour`, the dense pattern, and the prefix the
+    `device_prefixed` check holds the name to: pair order is load-bearing.
+    The rail order, the badge arrow, and (under `device_prefixed`) the key
+    prefix all present it as direction, and nothing can check that it is -
+    a pair written (consumer, producer) to borrow a colour makes all three
+    lie at once."""
     return (lane.device,) if isinstance(lane.device, str) else tuple(lane.device)
 
 
