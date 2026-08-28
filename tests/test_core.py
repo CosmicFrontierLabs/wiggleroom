@@ -266,3 +266,11 @@ def test_single_owner_lane_chrome_is_untouched_by_the_pair_feature(tmp_path):
     svg = render(make_project(tmp_path, [fig]), fig)
     assert "linearGradient" not in svg
     assert 'width="2.2"' not in svg
+
+
+def test_dense_on_a_two_owner_lane_uses_the_primary_device_pattern(tmp_path):
+    lanes = [Lane("PUMP_LINK", ("PUMP", "CTRL"), "Shared channel", "d",
+                  lambda c: c.dense(0.0, 10.0), "measured")]
+    fig = make_figure(lanes=lanes)
+    svg = render(make_project(tmp_path, [fig]), fig)
+    assert 'fill="url(#dense_PUMP)"' in svg
