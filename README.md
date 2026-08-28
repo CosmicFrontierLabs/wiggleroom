@@ -116,12 +116,15 @@ if __name__ == "__main__":
 ```bash
 python3 project.py                 # render + every check
 python3 project.py export          # hi-DPI PNGs into the project cache
-python3 project.py serve           # live preview, regenerated on refresh
+python3 project.py serve           # live preview, updates the browser on save
 ```
 
-The preview server re-renders on every refresh and purges both the project and
-the engine from `sys.modules` first, so editing either takes effect immediately;
-a module that fails to import becomes a traceback in the page rather than a
-stale figure. Hi-DPI exports are build artifacts: they go to the cache directory
+The preview server watches the sources and re-renders on save, pushing the new
+figures to every open page over server-sent events — pan/zoom positions survive
+the swap. It purges both the project and the engine from `sys.modules` before
+each render, so editing either takes effect immediately; a save that fails to
+render keeps the last good figures on screen with the traceback in a banner
+(and a module that fails to import at load becomes a traceback in the page)
+rather than a stale figure. Hi-DPI exports are build artifacts: they go to the cache directory
 and are offered for download from the preview page, never committed — the SVG is
 the source.
