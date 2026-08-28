@@ -34,6 +34,7 @@ from .core import (
     Project,
     figure_size,
     instants,
+    lane_pair,
     render,
 )
 
@@ -64,5 +65,6 @@ __all__ = [
     "Project",
     "figure_size",
     "instants",
+    "lane_pair",
     "render",
 ]

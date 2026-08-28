@@ -138,13 +138,27 @@ def text_width(s, size, *, bold=False):
 # ----------------------------------------------------------------- lane table
 @dataclass
 class Lane:
+    """One signal. `device` is its owner's key - or a pair of keys for a lane
+    that *is* the thing between two devices (an IPC channel, a serial link),
+    whose chrome then carries both colours: the rule as the producer's rail
+    beside the consumer's, the badge split at its direction arrow. The pair is
+    chrome only: draw functions see the first device's colour, exactly as if
+    the lane were singly owned, and colour the other side's marks explicitly."""
+
     key: str
-    device: str
+    device: str  # or a (producer, consumer) pair of device keys
     title: str
     detail: str
     draw: Callable[["Ctx"], None]
     provenance: str
     status: Sequence[str] = field(default_factory=tuple)
+
+
+def lane_pair(lane) -> tuple:
+    """A lane's owners, always as a tuple - one key normally, two for a shared
+    channel. The first entry is the primary: it picks `Ctx.colour`, the dense
+    pattern, and the prefix the `device_prefixed` check holds the name to."""
+    return (lane.device,) if isinstance(lane.device, str) else tuple(lane.device)
 
 
 @dataclass
@@ -524,7 +538,7 @@ class Ctx:
 
 
 # ---------------------------------------------------------------- the renderer
-def _defs(project):
+def _defs(project, fig):
     parts = ['<defs>']
     for name, col in [("arrow", INK2), ("arrow_crit", CRIT), ("arrow_ink", INK)] + [
         (f"arrow_{d.key}", d.colour) for d in project.devices.values()
@@ -544,6 +558,17 @@ def _defs(project):
             f'<rect width="{gap}" height="{gap if angle else 8}" fill="{col}" fill-opacity="{op_bg}"/>'
             f'<rect width="{wide}" height="{gap if angle else 8}" fill="{col}" fill-opacity="{op_fg}"/>'
             f'</pattern>'
+        )
+    # A two-owner lane's badge splits at its arrow: the producer's colour on the
+    # left, the consumer's on the right. A hard-stop gradient keeps the rounded
+    # corners without a clip path, and paints the stroke to match. One def per
+    # ordered pair, since (A, B) and (B, A) are different channels.
+    for a, b in {lane_pair(l) for l in fig.lanes if len(lane_pair(l)) == 2}:
+        parts.append(
+            f'<linearGradient id="half_{a}_{b}">'
+            f'<stop offset="0.5" stop-color="{project.devices[a].colour}"/>'
+            f'<stop offset="0.5" stop-color="{project.devices[b].colour}"/>'
+            f'</linearGradient>'
         )
     parts.append('</defs>')
     return "".join(parts)
@@ -572,15 +597,30 @@ def _header(emit, project):
 
 
 def _lane(emit, project, fig, lane, index, lane_top):
-    device = project.devices[lane.device]
+    pair = lane_pair(lane)
+    device = project.devices[pair[0]]
     col = device.colour
+    # The rule and badge are the chrome whose whole job is "whose lane is this",
+    # so a two-owner lane carries both colours there; everything sized or picked
+    # off the lane's own colour stays on the primary.
+    owner = f"url(#half_{pair[0]}_{pair[1]})" if len(pair) == 2 else col
     cy = lane_top + fig.lane_h / 2
 
     emit(f'<rect x="{X_IDX-10}" y="{lane_top}" width="{WIDTH - 2*X_IDX + 20}" '
          f'height="{fig.lane_h}" fill="{col}" fill-opacity="0.055"/>')
     emit(f'<line x1="{X_IDX-10}" y1="{lane_top}" x2="{WIDTH-X_IDX+10}" y2="{lane_top}" '
          f'stroke="{GRID}" stroke-width="1"/>')
-    emit(f'<rect x="{X_IDX-10}" y="{lane_top}" width="5" height="{fig.lane_h}" fill="{col}"/>')
+    if len(pair) == 2:
+        # Twin rails: the lane is the wire between two ends, so its rule is the
+        # producer's rail beside the consumer's rather than one owner's bar -
+        # both run the full lane height, so nothing reads as stacked lanes.
+        emit(f'<rect x="{X_IDX-10}" y="{lane_top}" width="2.2" height="{fig.lane_h}" '
+             f'fill="{col}"/>')
+        emit(f'<rect x="{X_IDX-7.2}" y="{lane_top}" width="2.2" height="{fig.lane_h}" '
+             f'fill="{project.devices[pair[1]].colour}"/>')
+    else:
+        emit(f'<rect x="{X_IDX-10}" y="{lane_top}" width="5" height="{fig.lane_h}" '
+             f'fill="{col}"/>')
 
     emit(f'<text x="{X_IDX+6}" y="{lane_top+KEY_BASELINE+2}" font-size="13" font-weight="700" '
          f'fill="{MUTED}" font-variant-numeric="tabular-nums">{index:02d}</text>')
@@ -590,16 +630,17 @@ def _lane(emit, project, fig, lane, index, lane_top):
     for i, line in enumerate(textwrap.wrap(lane.detail, DETAIL_WRAP)[:fig.detail_lines]):
         emit(text(X_NAME, lane_top + DETAIL_BASELINE + i * DETAIL_LEADING, line, 9.8, MUTED))
 
+    badge = " → ".join(project.devices[k].badge for k in pair)
     emit(f'<rect x="{X_BADGE}" y="{cy-12}" width="{BADGE_W}" height="24" rx="6" '
-         f'fill="{col}" fill-opacity="0.18" stroke="{col}" stroke-opacity="0.5"/>')
+         f'fill="{owner}" fill-opacity="0.18" stroke="{owner}" stroke-opacity="0.5"/>')
     emit(f'<text x="{X_BADGE + BADGE_W/2}" y="{cy+5}" font-size="12" font-weight="700" '
-         f'fill="{INK}" text-anchor="middle" letter-spacing="0.5">{esc(device.badge)}</text>')
+         f'fill="{INK}" text-anchor="middle" letter-spacing="0.5">{esc(badge)}</text>')
 
     marks = [project.provenance[lane.provenance]] + [project.status[s] for s in lane.status]
     for i, m in enumerate(marks):
         emit(text(X_MARKS + i * MARK_W, cy + 6, m.glyph, 15.5, m.colour, "start", 700))
 
-    lane.draw(Ctx(emit, fig.tmax, cy, col, fig.lane_h, device=lane.device,
+    lane.draw(Ctx(emit, fig.tmax, cy, col, fig.lane_h, device=pair[0],
                   devices=project.devices, tmin=fig.tmin))
 
 
@@ -622,7 +663,7 @@ def render(project: Project, fig: Figure) -> str:
 
     emit(f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" '
          f'viewBox="0 0 {WIDTH} {height}" font-family="{FONT}">')
-    emit(_defs(project))
+    emit(_defs(project, fig))
     emit(f'<rect width="{WIDTH}" height="{height}" fill="{PAGE}"/>')
     _header(emit, project)
 

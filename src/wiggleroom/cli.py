@@ -42,11 +42,16 @@ def check_arrowheads(svg, slug):
 
 
 def check_prefixes(figure):
-    """Report lanes whose name does not begin with their device."""
+    """Report lanes whose name does not begin with their device.
+
+    A two-owner lane is held to its primary (first) device - the same one that
+    picks its colour and dense pattern."""
     if not figure.device_prefixed:
         return []
-    return [f"{figure.slug} / {lane.key}: owned by {lane.device}, name does not say so"
-            for lane in figure.lanes if not lane.key.startswith(lane.device + "_")]
+    return [f"{figure.slug} / {lane.key}: owned by {core.lane_pair(lane)[0]}, "
+            f"name does not say so"
+            for lane in figure.lanes
+            if not lane.key.startswith(core.lane_pair(lane)[0] + "_")]
 
 
 def check_details(figure):

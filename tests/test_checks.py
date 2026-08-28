@@ -110,3 +110,12 @@ def test_serve_subcommand_refuses_a_nonscript_invocation(monkeypatch, project, c
     with pytest.raises(SystemExit):
         cli.main(proj, ["serve"])
     assert "run directly" in capsys.readouterr().err
+
+
+def test_prefix_check_holds_a_shared_lane_to_its_primary_device():
+    good = Lane("PUMP_LINK", ("PUMP", "CTRL"), "t", "d", lambda c: None, "measured")
+    bad = Lane("CTRL_LINK", ("PUMP", "CTRL"), "t", "d", lambda c: None, "measured")
+    fig = make_figure(lanes=[good, bad], device_prefixed=True)
+    findings = check_prefixes(fig)
+    assert len(findings) == 1
+    assert "CTRL_LINK" in findings[0] and "PUMP" in findings[0]
