@@ -15,6 +15,15 @@ def test_page_lists_every_figure(tmp_path, project, monkeypatch):
     assert proj.title in html_page
 
 
+def test_page_carries_the_wave_favicon(tmp_path, project, monkeypatch):
+    proj, fig = project
+    monkeypatch.setattr(serve, "_CORE", core)
+    monkeypatch.setattr(serve, "_HIDPI_DIR", tmp_path / "hidpi")
+    html_page = serve.page(proj, revision=1)
+    assert '<link id="fav" rel="icon">' in html_page
+    assert "FAV('2a78d6')" in html_page       # healthy colour; broken pages get red
+
+
 def test_page_navigation_survives_a_name_without_an_em_dash(tmp_path, project, monkeypatch):
     proj, fig = project
     assert "—" not in fig.name

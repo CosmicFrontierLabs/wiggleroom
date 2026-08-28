@@ -54,6 +54,7 @@ _ERROR = None
 PAGE = """<!doctype html>
 <meta charset="utf-8">
 <title>__TITLE__</title>
+<link id="fav" rel="icon">
 <style>
   body { margin: 0; padding: 22px 26px 60px;
          font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -97,6 +98,16 @@ __BODY__
 render<pre></pre></div>
 <script>
 const MIN_REL = 0.5, MAX_REL = 40;   // zoom limits, relative to fit-width
+
+// The favicon is a little wave, defined once here so the tab can change colour
+// with the generator's health: blue while rendering cleanly, red while broken.
+const FAV = c => "data:image/svg+xml," + encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>` +
+  `<rect width='32' height='32' rx='7' fill='#${c}'/>` +
+  `<path d='M5 20.5C8.5 20.5 8.5 11.5 12 11.5S15.5 20.5 19 20.5 22.5 11.5 26 11.5' ` +
+  `fill='none' stroke='#fff' stroke-width='4' stroke-linecap='round'/></svg>`);
+const fav = document.getElementById('fav');
+fav.href = FAV('__FAVC__');
 
 for (const vp of document.querySelectorAll('.viewport')) {
   const img = vp.querySelector('img');
@@ -167,6 +178,7 @@ const banner = document.getElementById('gen-error');
 new EventSource('events').onmessage = e => {
   const d = JSON.parse(e.data);
   banner.style.display = d.error ? 'block' : 'none';
+  fav.href = FAV(d.error ? 'd03b3b' : '2a78d6');
   if (d.error) { banner.querySelector('pre').textContent = d.error; return; }
   if (d.revision === rev) return;
   rev = d.revision;
@@ -317,7 +329,7 @@ def page(project, revision):
         nav += ('<span style="margin:0 8px 0 18px;color:#898781">high-DPI 4x:</span>' + links)
     return (PAGE.replace("__TITLE__", html.escape(project.title))
             .replace("__NAV__", nav).replace("__BODY__", "".join(parts))
-            .replace("__REV__", str(revision)))
+            .replace("__REV__", str(revision)).replace("__FAVC__", "2a78d6"))
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -346,7 +358,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         body = (PAGE.replace("__TITLE__", "figure generator error")
                 .replace("__NAV__", "").replace("__BODY__",
                 f'<pre class="err">{html.escape(error)}</pre>')
-                .replace("__REV__", "-1")
+                .replace("__REV__", "-1").replace("__FAVC__", "d03b3b")
                 if error else page(project, _REVISION))
         raw = body.encode()
         self.send_response(200)
