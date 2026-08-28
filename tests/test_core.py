@@ -3,7 +3,19 @@
 import xml.etree.ElementTree as ET
 
 from conftest import make_figure, make_project
-from wiggleroom import CRIT, GOOD, INK2, Ctx, Guide, Lane, Link, figure_size, instants, render
+from wiggleroom import (
+    CRIT,
+    GOOD,
+    INK2,
+    Ctx,
+    Guide,
+    Lane,
+    Link,
+    figure_size,
+    instants,
+    lane_pair,
+    render,
+)
 from wiggleroom.core import HEADER_H, OVERSET, PLOT_W, SPAN_MIN_PX, X0, X1, esc, time_to_x
 
 
@@ -224,3 +236,33 @@ def test_guides_and_links_share_the_lane_mapping_under_a_shifted_window(tmp_path
     svg = render(make_project(tmp_path, [fig]), fig)
     x = time_to_x(0.0, -100.0, 900.0)
     assert svg.count(f'x1="{x:.1f}"') >= 2
+
+
+def test_lane_pair_normalises_single_and_shared_owners():
+    single = Lane("PUMP_A", "PUMP", "t", "d", lambda c: None, "measured")
+    shared = Lane("LINK", ("PUMP", "CTRL"), "t", "d", lambda c: None, "measured")
+    assert lane_pair(single) == ("PUMP",)
+    assert lane_pair(shared) == ("PUMP", "CTRL")
+
+
+def test_two_owner_lane_chrome_carries_both_colours(tmp_path):
+    lanes = [Lane("LINK", ("PUMP", "CTRL"), "Shared channel", "d",
+                  lambda c: c.tick(0.0), "measured")]
+    fig = make_figure(lanes=lanes)
+    proj = make_project(tmp_path, [fig])
+    svg = render(proj, fig)
+    pump, ctrl = proj.devices["PUMP"].colour, proj.devices["CTRL"].colour
+    # The badge names both ends with the pair's direction, tinted by a
+    # hard-split gradient; the rule is the producer's rail beside the consumer's.
+    assert "PUMP → CTRL" in svg
+    assert '<linearGradient id="half_PUMP_CTRL">' in svg
+    assert f'stop-color="{pump}"/><stop offset="0.5" stop-color="{ctrl}"' in svg
+    assert svg.count('width="2.2"') == 2
+    assert 'fill="url(#half_PUMP_CTRL)"' in svg
+
+
+def test_single_owner_lane_chrome_is_untouched_by_the_pair_feature(tmp_path):
+    _, fig = make_project(tmp_path, [make_figure()]), make_figure()
+    svg = render(make_project(tmp_path, [fig]), fig)
+    assert "linearGradient" not in svg
+    assert 'width="2.2"' not in svg

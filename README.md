@@ -29,6 +29,13 @@ vocabularies, and where output goes. A **Figure** is a lane table on one time
 axis. A **Lane** belongs to a device, carries a title, a sentence of detail, one
 provenance mark, and a draw function that places marks through a **Ctx**.
 
+A lane that *is* the channel between two devices — a shared-memory mailbox, a
+serial link — can name both: `Lane("IPC_SETPOINT", ("CM7", "CM4"), ...)`. Its
+chrome then carries both owners: the left rule becomes the producer's rail
+beside the consumer's, and the badge reads `CM7 → CM4`, tinted half-and-half.
+The pair is chrome only — `Ctx.colour` stays the first device, so draw
+functions are unaffected and colour the other end's marks explicitly.
+
 A figure's window is `tmin` to `tmax`, and `tmin` defaults to zero. Set it
 negative when the subject starts before the nominal zero — a pre-trigger capture,
 or a clock whose defining edge is *at* zero and would otherwise be drawn hard
