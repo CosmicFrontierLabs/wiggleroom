@@ -10,9 +10,10 @@ Entry point for a project wrapper:
     main(PROJECT, sys.argv[1:])
 
 Subcommands: `render` (the default), `export [--scale N]` for hi-DPI PNGs, and
-`serve [port]` for the regenerate-on-refresh preview. Serving re-imports the
-project script on every request, so it needs that script run directly
-(`python3 project.py serve`) — the entry module is derived from the invocation.
+`serve [port]` for the live preview, which re-renders on save and pushes the
+result to open browsers. Serving re-imports the project script per render, so
+it needs that script run directly (`python3 project.py serve`) — the entry
+module is derived from the invocation.
 """
 
 import argparse
@@ -103,14 +104,15 @@ def main(project, argv):
     exp.add_argument("--scale", type=int, default=4)
     exp.add_argument("--out", type=pathlib.Path, default=None,
                      help="defaults to the project cache's hidpi directory")
-    srv = sub.add_parser("serve", help="preview server, regenerated on every refresh")
+    srv = sub.add_parser("serve", help="live preview server, re-rendered and pushed "
+                                       "to the browser on every source change")
     srv.add_argument("port", nargs="?", type=int, default=8931)
     args = parser.parse_args(argv or ["render"])
 
     if args.command == "serve":
         entry = pathlib.Path(sys.argv[0]).resolve()
         if entry.suffix != ".py":
-            parser.error("serve re-imports the project script per request, so it "
+            parser.error("serve re-imports the project script per render, so it "
                          "needs that script run directly: python3 <project>.py serve")
         serve.main(entry.stem, entry.parent, [str(args.port)])
         return
