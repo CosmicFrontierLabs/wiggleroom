@@ -567,8 +567,11 @@ def _defs(project, fig):
     # A two-owner lane's badge splits at its arrow: the producer's colour on the
     # left, the consumer's on the right. A hard-stop gradient keeps the rounded
     # corners without a clip path, and paints the stroke to match. One def per
-    # ordered pair, since (A, B) and (B, A) are different channels.
-    for a, b in {lane_pair(lane) for lane in fig.lanes if len(lane_pair(lane)) == 2}:
+    # ordered pair, since (A, B) and (B, A) are different channels, emitted in
+    # the order the lanes first use them so the output does not depend on
+    # string hashing.
+    pairs = dict.fromkeys(lane_pair(lane) for lane in fig.lanes if len(lane_pair(lane)) == 2)
+    for a, b in pairs:
         parts.append(
             f'<linearGradient id="half_{a}_{b}">'
             f'<stop offset="0.5" stop-color="{project.devices[a].colour}"/>'

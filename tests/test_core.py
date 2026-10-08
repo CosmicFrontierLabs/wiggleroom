@@ -47,6 +47,23 @@ def test_render_is_wellformed_svg_at_the_declared_size(project):
     assert (int(root.get("width")), int(root.get("height"))) == (width, height)
 
 
+def test_two_owner_gradients_follow_lane_order(tmp_path):
+    def nothing(c):
+        pass
+
+    lanes = [
+        Lane("CTRL_TO_PUMP", ("CTRL", "PUMP"), "Command", "Controller to pump.", nothing, "modelled"),
+        Lane("PUMP_TO_CTRL", ("PUMP", "CTRL"), "Reply", "Pump to controller.", nothing, "modelled"),
+        Lane("CTRL_AGAIN", ("CTRL", "PUMP"), "Command again", "A repeat pair.", nothing, "modelled"),
+    ]
+    fig = make_figure(lanes=lanes)
+    svg = render(make_project(tmp_path, [fig]), fig)
+    first = svg.index('id="half_CTRL_PUMP"')
+    second = svg.index('id="half_PUMP_CTRL"')
+    assert first < second
+    assert svg.count('<linearGradient id="half_CTRL_PUMP"') == 1
+
+
 def test_render_carries_every_lane_and_the_header(project):
     proj, fig = project
     svg = render(proj, fig)
